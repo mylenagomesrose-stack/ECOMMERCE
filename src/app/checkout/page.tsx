@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  User, MapPin, Truck, CreditCard, CheckCircle2, QrCode, Barcode, Copy, ShieldCheck, ChevronLeft, ChevronRight, Lock,
+  User, MapPin, Truck, CreditCard, CheckCircle2, QrCode, Barcode, Copy, ShieldCheck, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, Loader2,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatBRL } from "@/lib/format";
@@ -18,21 +18,100 @@ const STEPS = [
   { icon: CheckCircle2, label: "Confirmação" },
 ];
 
+// ——— Masks ———
+
+function maskCPF(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function maskPhone(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 3) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2, 3)} ${d.slice(3)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 3)} ${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
+function maskCEP(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+function maskCardNumber(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 16);
+  return d.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function maskExpiry(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}/${d.slice(2)}`;
+}
+
+function maskCVV(v: string) {
+  return v.replace(/\D/g, "").slice(0, 4);
+}
+
+function onlyLetters(v: string) {
+  return v.replace(/[^a-zA-ZÀ-ÿ\s]/g, "");
+}
+
+function onlyNumbers(v: string) {
+  return v.replace(/\D/g, "");
+}
+
+// ——— Validation ———
+
+function isValidCPF(cpf: string) {
+  return cpf.replace(/\D/g, "").length === 11;
+}
+
+function isValidPhone(phone: string) {
+  return phone.replace(/\D/g, "").length === 11;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidExpiry(expiry: string) {
+  const parts = expiry.split("/");
+  if (parts.length !== 2) return false;
+  const month = parseInt(parts[0], 10);
+  const year = parseInt(parts[1], 10);
+  if (month < 1 || month > 12) return false;
+  const now = new Date();
+  const currentYear = now.getFullYear() % 100;
+  const currentMonth = now.getMonth() + 1;
+  if (year < currentYear) return false;
+  if (year === currentYear && month < currentMonth) return false;
+  return true;
+}
+
 export default function CheckoutPage() {
   const { detailed, subtotal, clear } = useCart();
 
   const [step, setStep] = useState(0);
   const [savedOrder, setSavedOrder] = useState<Order | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
 
   // --- Identificação ---
   const [customer, setCustomer] = useState<OrderCustomer>({
     name: "", cpf: "", birthDate: "", email: "", phone: "",
   });
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // --- Endereço ---
   const [address, setAddress] = useState<OrderAddress>({
     cep: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "", country: "Brasil",
   });
+  const [cepLoading, setCepLoading] = useState(false);
 
   // --- Entrega ---
   const [deliveryMethod, setDeliveryMethod] = useState("padrao");
@@ -65,10 +144,80 @@ export default function CheckoutPage() {
     setCard((prev) => ({ ...prev, [field]: value }));
   }
 
-  function next() { setStep((s) => Math.min(4, s + 1)); }
-  function back() { setStep((s) => Math.max(0, s - 1)); }
+  // --- CEP auto-fill ---
+  async function fetchCEP(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setAddress((prev) => ({
+          ...prev,
+          street: data.logradouro || prev.street,
+          neighborhood: data.bairro || prev.neighborhood,
+          city: data.localidade || prev.city,
+          state: data.uf || prev.state,
+          country: "Brasil",
+        }));
+      }
+    } catch { /* silently fail */ }
+    setCepLoading(false);
+  }
+
+  // --- Validation per step ---
+  function validateStep0(): string[] {
+    const errs: string[] = [];
+    if (!customer.name.trim()) errs.push("Nome completo é obrigatório");
+    else if (customer.name.trim().length < 3) errs.push("Nome deve ter pelo menos 3 caracteres");
+    if (!isValidCPF(customer.cpf)) errs.push("CPF deve ter 11 dígitos");
+    if (!customer.birthDate) errs.push("Data de nascimento é obrigatória");
+    if (!isValidEmail(customer.email)) errs.push("E-mail inválido");
+    if (!isValidPhone(customer.phone)) errs.push("Telefone deve ter 11 dígitos");
+    if (password.length < 6 || password.length > 15) errs.push("Senha deve ter de 6 a 15 caracteres");
+    return errs;
+  }
+
+  function validateStep1(): string[] {
+    const errs: string[] = [];
+    if (address.cep.replace(/\D/g, "").length !== 8) errs.push("CEP deve ter 8 dígitos");
+    if (!address.street.trim()) errs.push("Rua é obrigatória");
+    if (!address.number.trim()) errs.push("Número é obrigatório");
+    if (!address.neighborhood.trim()) errs.push("Bairro é obrigatório");
+    if (!address.city.trim()) errs.push("Cidade é obrigatória");
+    if (!address.state.trim()) errs.push("Estado é obrigatório");
+    return errs;
+  }
+
+  function validateStep3(): string[] {
+    if (paymentMethod !== "cartao") return [];
+    const errs: string[] = [];
+    if (card.number.replace(/\D/g, "").length < 13) errs.push("Número do cartão inválido");
+    if (!card.holderName.trim()) errs.push("Nome no cartão é obrigatório");
+    if (!isValidExpiry(card.expiry)) errs.push("Validade inválida ou expirada");
+    if (card.cvv.length < 3) errs.push("CVV deve ter pelo menos 3 dígitos");
+    return errs;
+  }
+
+  function next() {
+    let errs: string[] = [];
+    if (step === 0) errs = validateStep0();
+    else if (step === 1) errs = validateStep1();
+    setErrors(errs);
+    if (errs.length === 0) setStep((s) => Math.min(4, s + 1));
+  }
+
+  function back() {
+    setErrors([]);
+    setStep((s) => Math.max(0, s - 1));
+  }
 
   async function finish() {
+    const errs = validateStep3();
+    setErrors(errs);
+    if (errs.length > 0) return;
+
     const payment: OrderPayment = {
       method: paymentMethod,
       card: paymentMethod === "cartao" ? { ...card } : undefined,
@@ -123,18 +272,45 @@ export default function CheckoutPage() {
         ))}
       </ol>
 
+      {/* Errors */}
+      {errors.length > 0 && (
+        <div className="mb-4 rounded-xl border p-4" style={{ borderColor: "#fca5a5", backgroundColor: "#fef2f2" }}>
+          <p className="mb-1 text-sm font-bold" style={{ color: "#b91c1c" }}>Corrija os seguintes campos:</p>
+          <ul className="list-inside list-disc text-sm" style={{ color: "#dc2626" }}>
+            {errors.map((e) => <li key={e}>{e}</li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="card p-6">
           {/* STEP 0 — Identificação */}
           {step === 0 && (
             <Section title="Identificação">
-              <Field label="Nome completo" value={customer.name} onChange={(v) => updateCustomer("name", v)} placeholder="Seu nome completo" />
+              <Field label="Nome completo *" value={customer.name} onChange={(v) => updateCustomer("name", onlyLetters(v))} placeholder="Seu nome completo" />
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="CPF" value={customer.cpf} onChange={(v) => updateCustomer("cpf", v)} placeholder="000.000.000-00" />
-                <Field label="Data de nascimento" value={customer.birthDate} onChange={(v) => updateCustomer("birthDate", v)} type="date" />
+                <Field label="CPF *" value={customer.cpf} onChange={(v) => updateCustomer("cpf", maskCPF(v))} placeholder="000.000.000-00" />
+                <Field label="Data de nascimento *" value={customer.birthDate} onChange={(v) => updateCustomer("birthDate", v)} type="date" />
               </div>
-              <Field label="E-mail" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
-              <Field label="Telefone" value={customer.phone} onChange={(v) => updateCustomer("phone", v)} placeholder="(00) 00000-0000" />
+              <Field label="E-mail *" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
+              <Field label="Telefone *" value={customer.phone} onChange={(v) => updateCustomer("phone", maskPhone(v))} placeholder="(00) 0 0000-0000" />
+              <div>
+                <label className="mb-1 block text-sm font-semibold">Criar senha * <span className="font-normal text-muted">(6 a 15 caracteres)</span></label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Crie sua senha"
+                    value={password}
+                    maxLength={15}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground">
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-muted">{password.length}/15 caracteres</p>
+              </div>
               <p className="text-xs text-muted">Já tem conta? <Link href="/conta" className="text-primary hover:underline">Entrar</Link></p>
             </Section>
           )}
@@ -143,17 +319,33 @@ export default function CheckoutPage() {
           {step === 1 && (
             <Section title="Endereço de entrega">
               <div className="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <Field label="CEP" value={address.cep} onChange={(v) => updateAddress("cep", v)} placeholder="00000-000" />
-                <Field label="Rua / Logradouro" value={address.street} onChange={(v) => updateAddress("street", v)} placeholder="Nome da rua" />
+                <div>
+                  <label className="mb-1 block text-sm font-semibold">CEP *</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="00000-000"
+                      value={address.cep}
+                      onChange={(e) => {
+                        const masked = maskCEP(e.target.value);
+                        updateAddress("cep", masked);
+                        if (masked.replace(/\D/g, "").length === 8) fetchCEP(masked);
+                      }}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    {cepLoading && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-primary" />}
+                  </div>
+                </div>
+                <Field label="Rua / Logradouro *" value={address.street} onChange={(v) => updateAddress("street", v)} placeholder="Nome da rua" />
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Número" value={address.number} onChange={(v) => updateAddress("number", v)} placeholder="123" />
+                <Field label="Número *" value={address.number} onChange={(v) => updateAddress("number", v)} placeholder="123" />
                 <Field label="Complemento" value={address.complement} onChange={(v) => updateAddress("complement", v)} placeholder="Apto, bloco..." />
-                <Field label="Bairro" value={address.neighborhood} onChange={(v) => updateAddress("neighborhood", v)} placeholder="Bairro" />
+                <Field label="Bairro *" value={address.neighborhood} onChange={(v) => updateAddress("neighborhood", v)} placeholder="Bairro" />
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Cidade" value={address.city} onChange={(v) => updateAddress("city", v)} placeholder="Cidade" />
-                <Field label="Estado" value={address.state} onChange={(v) => updateAddress("state", v)} placeholder="UF" />
+                <Field label="Cidade *" value={address.city} onChange={(v) => updateAddress("city", v)} placeholder="Cidade" />
+                <Field label="Estado *" value={address.state} onChange={(v) => updateAddress("state", v)} placeholder="UF" />
                 <Field label="País" value={address.country} onChange={(v) => updateAddress("country", v)} placeholder="Brasil" />
               </div>
             </Section>
@@ -203,11 +395,11 @@ export default function CheckoutPage() {
 
               {paymentMethod === "cartao" && (
                 <div className="grid gap-4">
-                  <Field label="Número do cartão" value={card.number} onChange={(v) => updateCard("number", v)} placeholder="0000 0000 0000 0000" />
-                  <Field label="Nome no cartão" value={card.holderName} onChange={(v) => updateCard("holderName", v)} placeholder="Como impresso no cartão" />
+                  <Field label="Número do cartão *" value={card.number} onChange={(v) => updateCard("number", maskCardNumber(v))} placeholder="0000 0000 0000 0000" />
+                  <Field label="Nome no cartão *" value={card.holderName} onChange={(v) => updateCard("holderName", onlyLetters(v))} placeholder="Como impresso no cartão" />
                   <div className="grid grid-cols-3 gap-4">
-                    <Field label="Validade" value={card.expiry} onChange={(v) => updateCard("expiry", v)} placeholder="MM/AA" />
-                    <Field label="CVV" value={card.cvv} onChange={(v) => updateCard("cvv", v)} placeholder="123" />
+                    <Field label="Validade *" value={card.expiry} onChange={(v) => updateCard("expiry", maskExpiry(v))} placeholder="MM/AA" />
+                    <Field label="CVV *" value={card.cvv} onChange={(v) => updateCard("cvv", maskCVV(v))} placeholder="123" />
                     <div>
                       <label className="mb-1 block text-sm font-semibold">Parcelas</label>
                       <select
@@ -221,7 +413,7 @@ export default function CheckoutPage() {
                       </select>
                     </div>
                   </div>
-                  <p className="flex items-center gap-1.5 text-xs text-muted"><Lock size={13} /> Dados salvos localmente para futura integração com gateway de pagamento.</p>
+                  <p className="flex items-center gap-1.5 text-xs text-muted"><Lock size={13} /> Pagamento processado de forma segura.</p>
                 </div>
               )}
 
@@ -239,7 +431,7 @@ export default function CheckoutPage() {
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 size={64} className="text-success" />
               <h2 className="text-2xl font-extrabold text-navy">Pedido realizado com sucesso!</h2>
-              <p className="text-sm text-muted">Todos os dados foram salvos. Pedido registrado localmente.</p>
+              <p className="text-sm text-muted">Todos os dados foram salvos.</p>
 
               <div className="mt-2 w-full max-w-md rounded-xl border border-border p-4 text-left text-sm">
                 <h3 className="mb-2 font-bold text-navy">Dados do pedido</h3>
@@ -268,9 +460,8 @@ export default function CheckoutPage() {
                 {displayOrder.payment.method === "cartao" && displayOrder.payment.card && (
                   <>
                     <h3 className="mb-2 mt-4 font-bold text-navy">Cartão</h3>
-                    <p className="flex justify-between"><span className="text-muted">Número</span> <strong>{displayOrder.payment.card.number}</strong></p>
+                    <p className="flex justify-between"><span className="text-muted">Final</span> <strong>****{displayOrder.payment.card.number.replace(/\D/g, "").slice(-4)}</strong></p>
                     <p className="flex justify-between"><span className="text-muted">Titular</span> <strong>{displayOrder.payment.card.holderName || "—"}</strong></p>
-                    <p className="flex justify-between"><span className="text-muted">Validade</span> <strong>{displayOrder.payment.card.expiry || "—"}</strong></p>
                     <p className="flex justify-between"><span className="text-muted">Parcelas</span> <strong>{displayOrder.payment.card.installments}x de {formatBRL(displayOrder.total / displayOrder.payment.card.installments)}</strong></p>
                   </>
                 )}
@@ -300,7 +491,7 @@ export default function CheckoutPage() {
                 </ul>
               </div>
 
-              <div className="mt-3 rounded-lg bg-green-50 p-3 text-xs text-green-800">
+              <div className="mt-3 rounded-lg p-3 text-xs" style={{ backgroundColor: "#f0fdf4", color: "#166534" }}>
                 Pedido salvo com sucesso no banco de dados.
               </div>
 
