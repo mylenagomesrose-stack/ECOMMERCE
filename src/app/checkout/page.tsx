@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   User, MapPin, Truck, CreditCard, CheckCircle2, QrCode, Barcode, Copy, ShieldCheck, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, Loader2,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { formatBRL } from "@/lib/format";
 import { finalPrice, listPrice } from "@/lib/pricing";
 import { saveOrder, type Order, type OrderCustomer, type OrderAddress, type OrderPayment, type OrderCardPayment } from "@/lib/orders";
@@ -95,10 +96,12 @@ function isValidExpiry(expiry: string) {
 
 export default function CheckoutPage() {
   const { detailed, subtotal, clear } = useCart();
+  const { user, profile, signUp, signIn } = useAuth();
 
   const [step, setStep] = useState(0);
   const [savedOrder, setSavedOrder] = useState<Order | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [authMode, setAuthMode] = useState<"criar" | "entrar">("criar");
 
   // --- Identificação ---
   const [customer, setCustomer] = useState<OrderCustomer>({
@@ -106,6 +109,19 @@ export default function CheckoutPage() {
   });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (user && profile) {
+      setCustomer({
+        name: profile.name || "",
+        cpf: profile.cpf || "",
+        birthDate: profile.birthDate || "",
+        email: user.email || "",
+        phone: profile.phone || "",
+      });
+      setAuthMode("entrar");
+    }
+  }, [user, profile]);
 
   // --- Endereço ---
   const [address, setAddress] = useState<OrderAddress>({
@@ -169,13 +185,25 @@ export default function CheckoutPage() {
   // --- Validation per step ---
   function validateStep0(): string[] {
     const errs: string[] = [];
-    if (!customer.name.trim()) errs.push("Nome completo é obrigatório");
-    else if (customer.name.trim().length < 3) errs.push("Nome deve ter pelo menos 3 caracteres");
-    if (!isValidCPF(customer.cpf)) errs.push("CPF deve ter 11 dígitos");
-    if (!customer.birthDate) errs.push("Data de nascimento é obrigatória");
-    if (!isValidEmail(customer.email)) errs.push("E-mail inválido");
-    if (!isValidPhone(customer.phone)) errs.push("Telefone deve ter 11 dígitos");
-    if (password.length < 6 || password.length > 15) errs.push("Senha deve ter de 6 a 15 caracteres");
+    if (user) {
+      if (!customer.name.trim()) errs.push("Nome completo é obrigatório");
+      else if (customer.name.trim().length < 3) errs.push("Nome deve ter pelo menos 3 caracteres");
+      if (!isValidCPF(customer.cpf)) errs.push("CPF deve ter 11 dígitos");
+      if (!customer.birthDate) errs.push("Data de nascimento é obrigatória");
+      if (!isValidEmail(customer.email)) errs.push("E-mail inválido");
+      if (!isValidPhone(customer.phone)) errs.push("Telefone deve ter 11 dígitos");
+    } else if (authMode === "criar") {
+      if (!customer.name.trim()) errs.push("Nome completo é obrigatório");
+      else if (customer.name.trim().length < 3) errs.push("Nome deve ter pelo menos 3 caracteres");
+      if (!isValidCPF(customer.cpf)) errs.push("CPF deve ter 11 dígitos");
+      if (!customer.birthDate) errs.push("Data de nascimento é obrigatória");
+      if (!isValidEmail(customer.email)) errs.push("E-mail inválido");
+      if (!isValidPhone(customer.phone)) errs.push("Telefone deve ter 11 dígitos");
+      if (password.length < 6 || password.length > 15) errs.push("Senha deve ter de 6 a 15 caracteres");
+    } else {
+      if (!isValidEmail(customer.email)) errs.push("E-mail inválido");
+      if (!password) errs.push("Senha é obrigatória");
+    }
     return errs;
   }
 
@@ -200,10 +228,24 @@ export default function CheckoutPage() {
     return errs;
   }
 
-  function next() {
+  async function next() {
     let errs: string[] = [];
-    if (step === 0) errs = validateStep0();
-    else if (step === 1) errs = validateStep1();
+    if (step === 0) {
+      errs = validateStep0();
+      if (errs.length === 0 && !user) {
+        if (authMode === "criar") {
+          const result = await signUp(customer.email, password, {
+            name: customer.name, cpf: customer.cpf, birthDate: customer.birthDate, phone: customer.phone,
+          });
+          if (result.error) { setErrors([result.error]); return; }
+        } else {
+          const result = await signIn(customer.email, password);
+          if (result.error) { setErrors([result.error]); return; }
+        }
+      }
+    } else if (step === 1) {
+      errs = validateStep1();
+    }
     setErrors(errs);
     if (errs.length === 0) setStep((s) => Math.min(4, s + 1));
   }
@@ -244,6 +286,7 @@ export default function CheckoutPage() {
       subtotal,
       frete,
       total,
+      user?.id,
     );
 
     setSavedOrder(order);
@@ -287,31 +330,83 @@ export default function CheckoutPage() {
           {/* STEP 0 — Identificação */}
           {step === 0 && (
             <Section title="Identificação">
-              <Field label="Nome completo *" value={customer.name} onChange={(v) => updateCustomer("name", onlyLetters(v))} placeholder="Seu nome completo" />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="CPF *" value={customer.cpf} onChange={(v) => updateCustomer("cpf", maskCPF(v))} placeholder="000.000.000-00" />
-                <Field label="Data de nascimento *" value={customer.birthDate} onChange={(v) => updateCustomer("birthDate", v)} type="date" />
-              </div>
-              <Field label="E-mail *" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
-              <Field label="Telefone *" value={customer.phone} onChange={(v) => updateCustomer("phone", maskPhone(v))} placeholder="(00) 0 0000-0000" />
-              <div>
-                <label className="mb-1 block text-sm font-semibold">Criar senha * <span className="font-normal text-muted">(6 a 15 caracteres)</span></label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Crie sua senha"
-                    value={password}
-                    maxLength={15}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+              {user ? (
+                <div className="rounded-lg border border-border bg-background p-3 text-sm">
+                  <p className="font-semibold text-navy">Logado como {profile?.name || user.email}</p>
+                  <p className="text-xs text-muted">Os campos foram preenchidos automaticamente com seus dados.</p>
                 </div>
-                <p className="mt-1 text-xs text-muted">{password.length}/15 caracteres</p>
-              </div>
-              <p className="text-xs text-muted">Já tem conta? <Link href="/conta" className="text-primary hover:underline">Entrar</Link></p>
+              ) : (
+                <div className="mb-2 flex rounded-full bg-background p-1">
+                  {(["criar", "entrar"] as const).map((m) => (
+                    <button key={m} onClick={() => { setAuthMode(m); setErrors([]); }} className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${authMode === m ? "bg-primary text-white shadow-sm" : "text-muted"}`}>
+                      {m === "criar" ? "Criar conta" : "Já tenho conta"}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {authMode === "criar" && !user && (
+                <>
+                  <Field label="Nome completo *" value={customer.name} onChange={(v) => updateCustomer("name", onlyLetters(v))} placeholder="Seu nome completo" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="CPF *" value={customer.cpf} onChange={(v) => updateCustomer("cpf", maskCPF(v))} placeholder="000.000.000-00" />
+                    <Field label="Data de nascimento *" value={customer.birthDate} onChange={(v) => updateCustomer("birthDate", v)} type="date" />
+                  </div>
+                  <Field label="E-mail *" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
+                  <Field label="Telefone *" value={customer.phone} onChange={(v) => updateCustomer("phone", maskPhone(v))} placeholder="(00) 0 0000-0000" />
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold">Criar senha * <span className="font-normal text-muted">(6 a 15 caracteres)</span></label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Crie sua senha"
+                        value={password}
+                        maxLength={15}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground">
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">{password.length}/15 caracteres</p>
+                  </div>
+                </>
+              )}
+
+              {authMode === "entrar" && !user && (
+                <>
+                  <Field label="E-mail *" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold">Senha *</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Sua senha"
+                        value={password}
+                        maxLength={15}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground">
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {user && (
+                <>
+                  <Field label="Nome completo *" value={customer.name} onChange={(v) => updateCustomer("name", onlyLetters(v))} placeholder="Seu nome completo" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="CPF *" value={customer.cpf} onChange={(v) => updateCustomer("cpf", maskCPF(v))} placeholder="000.000.000-00" />
+                    <Field label="Data de nascimento *" value={customer.birthDate} onChange={(v) => updateCustomer("birthDate", v)} type="date" />
+                  </div>
+                  <Field label="E-mail *" value={customer.email} onChange={(v) => updateCustomer("email", v)} type="email" placeholder="voce@email.com" />
+                  <Field label="Telefone *" value={customer.phone} onChange={(v) => updateCustomer("phone", maskPhone(v))} placeholder="(00) 0 0000-0000" />
+                </>
+              )}
             </Section>
           )}
 

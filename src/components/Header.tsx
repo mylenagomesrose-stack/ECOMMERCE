@@ -8,11 +8,13 @@ import {
   Activity, Truck, ShieldCheck, Stethoscope,
 } from "lucide-react";
 import { categories } from "@/lib/data";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 
 export default function Header() {
   const router = useRouter();
   const { count, setOpen } = useCart();
+  const { user, profile } = useAuth();
   const [q, setQ] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
@@ -73,8 +75,8 @@ export default function Header() {
           <Link href="/conta" className="hidden items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-background sm:flex" aria-label="Minha conta">
             <User size={22} />
             <span className="hidden text-left leading-tight lg:block">
-              <span className="block text-[10px] text-muted">Entrar</span>
-              <span className="block text-xs font-semibold">Minha conta</span>
+              <span className="block text-[10px] text-muted">{user ? (profile?.name?.split(" ")[0] || "Olá") : "Entrar"}</span>
+              <span className="block text-xs font-semibold">{user ? "Minha conta" : "Criar conta"}</span>
             </span>
           </Link>
           <Link href="/favoritos" className="relative grid h-10 w-10 place-items-center rounded-lg hover:bg-background" aria-label="Favoritos">

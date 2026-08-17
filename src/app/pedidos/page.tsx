@@ -6,19 +6,26 @@ import {
   Package, CheckCircle2, Circle, CreditCard, Boxes, PackageCheck, Send, Truck, Home, Trash2, ShoppingBag,
 } from "lucide-react";
 import { formatBRL } from "@/lib/format";
-import { getOrders, deleteOrder, STATUS_LABELS, type Order } from "@/lib/orders";
+import { getOrders, getOrdersByUser, deleteOrder, STATUS_LABELS, type Order } from "@/lib/orders";
+import { useAuth } from "@/context/AuthContext";
 import ProductImage from "@/components/ProductImage";
 import { productBySlug } from "@/lib/data";
 
 const TIMELINE_ICONS = [Package, CreditCard, Boxes, PackageCheck, CheckCircle2, Send, Truck, Home];
 
 export default function PedidosPage() {
+  const { user, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    getOrders().then(setOrders);
-  }, []);
+    if (authLoading) return;
+    if (user) {
+      getOrdersByUser(user.id).then(setOrders);
+    } else {
+      getOrders().then(setOrders);
+    }
+  }, [user, authLoading]);
 
   async function handleDelete(id: string) {
     await deleteOrder(id);

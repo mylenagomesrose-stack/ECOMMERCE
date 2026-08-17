@@ -176,6 +176,33 @@ export async function getOrders(): Promise<Order[]> {
   return rows.map((r) => rowToOrder(r, itemsMap.get(r.id as string) ?? []));
 }
 
+export async function getOrdersByUser(userId: string): Promise<Order[]> {
+  if (!supabase) return getOrdersLocal();
+
+  const { data: rows, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error || !rows) return getOrdersLocal();
+
+  const orderIds = rows.map((r) => r.id as string);
+  const { data: allItems } = await supabase
+    .from("order_items")
+    .select("*")
+    .in("order_id", orderIds);
+
+  const itemsMap = new Map<string, Record<string, unknown>[]>();
+  for (const item of allItems ?? []) {
+    const arr = itemsMap.get(item.order_id as string) ?? [];
+    arr.push(item);
+    itemsMap.set(item.order_id as string, arr);
+  }
+
+  return rows.map((r) => rowToOrder(r, itemsMap.get(r.id as string) ?? []));
+}
+
 export async function getOrderById(id: string): Promise<Order | undefined> {
   if (!supabase) return getOrdersLocal().find((o) => o.id === id);
 
@@ -205,6 +232,7 @@ export async function saveOrder(
   subtotal: number,
   shipping: number,
   total: number,
+  userId?: string,
 ): Promise<Order> {
   const id = generateId();
   const pixCode = payment.method === "pix" ? generatePixCode() : undefined;
@@ -234,6 +262,7 @@ export async function saveOrder(
     const { error: orderError } = await supabase.from("orders").insert({
       id,
       status: 0,
+      user_id: userId || null,
       customer_name: customer.name,
       customer_cpf: customer.cpf,
       customer_birth_date: customer.birthDate,
