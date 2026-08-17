@@ -225,51 +225,66 @@ export async function saveOrder(
   };
 
   if (!supabase) {
+    console.log("[OrtoCenter] Supabase não configurado, salvando no localStorage");
     saveOrderLocal(order);
     return order;
   }
 
-  await supabase.from("orders").insert({
-    id,
-    status: 0,
-    customer_name: customer.name,
-    customer_cpf: customer.cpf,
-    customer_birth_date: customer.birthDate,
-    customer_email: customer.email,
-    customer_phone: customer.phone,
-    address_cep: address.cep,
-    address_street: address.street,
-    address_number: address.number,
-    address_complement: address.complement,
-    address_neighborhood: address.neighborhood,
-    address_city: address.city,
-    address_state: address.state,
-    address_country: address.country,
-    delivery_method: deliveryMethod,
-    delivery_cost: deliveryCost,
-    payment_method: payment.method,
-    payment_card: payment.method === "cartao" ? payment.card : null,
-    payment_pix_code: pixCode,
-    payment_boleto_code: boletoCode,
-    subtotal,
-    shipping,
-    total,
-  });
+  try {
+    const { error: orderError } = await supabase.from("orders").insert({
+      id,
+      status: 0,
+      customer_name: customer.name,
+      customer_cpf: customer.cpf,
+      customer_birth_date: customer.birthDate,
+      customer_email: customer.email,
+      customer_phone: customer.phone,
+      address_cep: address.cep,
+      address_street: address.street,
+      address_number: address.number,
+      address_complement: address.complement,
+      address_neighborhood: address.neighborhood,
+      address_city: address.city,
+      address_state: address.state,
+      address_country: address.country,
+      delivery_method: deliveryMethod,
+      delivery_cost: deliveryCost,
+      payment_method: payment.method,
+      payment_card: payment.method === "cartao" ? payment.card : null,
+      payment_pix_code: pixCode,
+      payment_boleto_code: boletoCode,
+      subtotal,
+      shipping,
+      total,
+    });
 
-  if (items.length > 0) {
-    await supabase.from("order_items").insert(
-      items.map((item) => ({
-        order_id: id,
-        product_id: item.productId,
-        product_name: item.productName,
-        product_slug: item.productSlug,
-        brand: item.brand,
-        size: item.size ?? null,
-        qty: item.qty,
-        unit_price: item.unitPrice,
-        original_price: item.originalPrice,
-      })),
-    );
+    if (orderError) {
+      console.error("[OrtoCenter] Erro ao salvar pedido no Supabase:", orderError);
+      saveOrderLocal(order);
+      return order;
+    }
+
+    if (items.length > 0) {
+      const { error: itemsError } = await supabase.from("order_items").insert(
+        items.map((item) => ({
+          order_id: id,
+          product_id: item.productId,
+          product_name: item.productName,
+          product_slug: item.productSlug,
+          brand: item.brand,
+          size: item.size ?? null,
+          qty: item.qty,
+          unit_price: item.unitPrice,
+          original_price: item.originalPrice,
+        })),
+      );
+      if (itemsError) console.error("[OrtoCenter] Erro ao salvar itens:", itemsError);
+    }
+
+    console.log("[OrtoCenter] Pedido salvo no Supabase:", id);
+  } catch (err) {
+    console.error("[OrtoCenter] Erro inesperado:", err);
+    saveOrderLocal(order);
   }
 
   return order;
