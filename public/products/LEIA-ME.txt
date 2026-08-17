@@ -1,0 +1,17 @@
+PASTA DE FOTOS DOS PRODUTOS
+===========================
+
+Salve aqui as fotos de cada produto usando EXATAMENTE o nome (slug) do produto.
+Assim que o arquivo existir, a foto aparece sozinha no site (sem mexer no código).
+Se não houver foto, o site mostra o placeholder com gradiente + ícone.
+
+Formatos aceitos (nesta ordem de preferência): .webp  .png  .jpg
+Recomendado: fundo branco/cinza claro, produto centralizado, quadrado (ex.: 1200x1200).
+
+Exemplos de nome de arquivo:
+  joelho-hidraulico-hydraflex-pro.png
+  pe-de-fibra-de-carbono-carbonrun.webp
+  mao-mioeletrica-neogrip.jpg
+
+A lista completa de nomes e os prompts prontos para gerar as fotos por IA
+estão no arquivo:  IMAGENS-PROMPTS.md  (na raiz do projeto)
