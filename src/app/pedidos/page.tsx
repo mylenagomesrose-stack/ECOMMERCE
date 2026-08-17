@@ -133,9 +133,9 @@ export default function PedidosPage() {
                         <h3 className="mb-2 text-sm font-bold">Cliente</h3>
                         <div className="rounded-lg bg-background p-3 text-sm">
                           <p><strong>Nome:</strong> {order.customer.name || "—"}</p>
-                          <p><strong>CPF:</strong> {order.customer.cpf || "—"}</p>
-                          <p><strong>E-mail:</strong> {order.customer.email || "—"}</p>
-                          <p><strong>Telefone:</strong> {order.customer.phone || "—"}</p>
+                          <p><strong>CPF:</strong> {order.customer.cpf ? `***.${order.customer.cpf.replace(/\D/g, "").slice(3, 6)}.***-**` : "—"}</p>
+                          <p><strong>E-mail:</strong> {order.customer.email ? `${order.customer.email.slice(0, 3)}***@${order.customer.email.split("@")[1]}` : "—"}</p>
+                          <p><strong>Telefone:</strong> {order.customer.phone ? `${order.customer.phone.slice(0, 5)} *****-${order.customer.phone.slice(-4)}` : "—"}</p>
                           {order.customer.birthDate && <p><strong>Nascimento:</strong> {new Date(order.customer.birthDate + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
                         </div>
                       </div>
@@ -158,10 +158,9 @@ export default function PedidosPage() {
                         <p><strong>Método:</strong> <span className="capitalize">{order.payment.method}</span></p>
                         {order.payment.method === "cartao" && order.payment.card && (
                           <>
-                            <p><strong>Cartão:</strong> {order.payment.card.number}</p>
+                            <p><strong>Cartão:</strong> **** **** **** {order.payment.card.number.replace(/\D/g, "").slice(-4)}</p>
                             <p><strong>Titular:</strong> {order.payment.card.holderName || "—"}</p>
                             <p><strong>Validade:</strong> {order.payment.card.expiry || "—"}</p>
-                            <p><strong>CVV:</strong> {order.payment.card.cvv || "—"}</p>
                             <p><strong>Parcelas:</strong> {order.payment.card.installments}x de {formatBRL(order.total / order.payment.card.installments)}</p>
                           </>
                         )}
