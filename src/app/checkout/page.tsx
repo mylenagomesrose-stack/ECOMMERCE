@@ -68,7 +68,7 @@ export default function CheckoutPage() {
   function next() { setStep((s) => Math.min(4, s + 1)); }
   function back() { setStep((s) => Math.max(0, s - 1)); }
 
-  function finish() {
+  async function finish() {
     const payment: OrderPayment = {
       method: paymentMethod,
       card: paymentMethod === "cartao" ? { ...card } : undefined,
@@ -85,7 +85,7 @@ export default function CheckoutPage() {
       originalPrice: listPrice(product),
     }));
 
-    const order = saveOrder(
+    const order = await saveOrder(
       customer,
       address,
       deliveryMethod === "padrao" ? "Entrega padrão" : "Retirar no local",
@@ -301,7 +301,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="mt-3 rounded-lg bg-green-50 p-3 text-xs text-green-800">
-                Pedido salvo no armazenamento local do navegador. Quando o banco de dados for implementado, esses dados serão migrados.
+                Pedido salvo com sucesso no banco de dados.
               </div>
 
               <Link href="/pedidos" className="btn btn-primary mt-3 px-6 py-3 text-sm">Ver meus pedidos <ChevronRight size={18} /></Link>

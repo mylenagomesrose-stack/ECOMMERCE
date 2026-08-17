@@ -17,12 +17,13 @@ export default function PedidosPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    setOrders(getOrders());
+    getOrders().then(setOrders);
   }, []);
 
-  function handleDelete(id: string) {
-    deleteOrder(id);
-    setOrders(getOrders());
+  async function handleDelete(id: string) {
+    await deleteOrder(id);
+    const updated = await getOrders();
+    setOrders(updated);
   }
 
   if (orders.length === 0) {
@@ -189,8 +190,8 @@ export default function PedidosPage() {
       </div>
 
       <div className="mt-6 rounded-xl border border-border bg-surface p-5 text-sm text-muted">
-        <p className="font-semibold text-foreground">Armazenamento local</p>
-        <p className="mt-1">Os pedidos estão salvos no localStorage do navegador. Quando o banco de dados for implementado (Supabase), esses dados serão migrados automaticamente.</p>
+        <p className="font-semibold text-foreground">Armazenamento em nuvem</p>
+        <p className="mt-1">Os pedidos estão salvos no banco de dados Supabase.</p>
       </div>
     </div>
   );

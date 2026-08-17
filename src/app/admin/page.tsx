@@ -55,12 +55,13 @@ export default function AdminPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    setOrders(getOrders());
+    getOrders().then(setOrders);
   }, []);
 
-  function handleDelete(id: string) {
-    deleteOrder(id);
-    setOrders(getOrders());
+  async function handleDelete(id: string) {
+    await deleteOrder(id);
+    const updated = await getOrders();
+    setOrders(updated);
     setConfirmDelete(null);
     setExpandedId(null);
   }
@@ -317,8 +318,8 @@ export default function AdminPage() {
 
         {/* Footer info */}
         <div className="mt-8 rounded-xl border border-border bg-surface p-5 text-sm text-muted">
-          <p className="font-semibold text-foreground">Armazenamento local (localStorage)</p>
-          <p className="mt-1">Todos os pedidos estão salvos no navegador. Ao implementar o Supabase, os dados serão migrados para o banco de dados na nuvem.</p>
+          <p className="font-semibold text-foreground">Banco de dados Supabase</p>
+          <p className="mt-1">Todos os pedidos estão salvos no banco de dados na nuvem (Supabase).</p>
         </div>
       </div>
     </div>
