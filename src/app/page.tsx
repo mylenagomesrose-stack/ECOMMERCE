@@ -1,18 +1,11 @@
 import Link from "next/link";
-import * as Icons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight, Truck, ShieldCheck, Headphones, CreditCard, Quote, Stethoscope, ChevronRight,
 } from "lucide-react";
-import { categories, products, featured, novelties, offers } from "@/lib/data";
+import { products, featured, novelties, offers } from "@/lib/data";
 import ProductCard from "@/components/ProductCard";
 import ProductImage from "@/components/ProductImage";
 import Stars from "@/components/Stars";
-
-function Icon({ name, ...props }: { name: string } & Icons.LucideProps) {
-  const C = ((Icons as unknown as Record<string, LucideIcon>)[name] ?? Icons.Package) as LucideIcon;
-  return <C {...props} />;
-}
 
 const trust = [
   { icon: Truck, title: "Envio para todo o Brasil", text: "Acompanhe cada etapa do pedido" },
@@ -85,27 +78,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CATEGORIES */}
-      <section className="container-app py-12">
-        <div className="mb-6 flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl font-extrabold text-navy md:text-3xl">Categorias</h2>
-            <p className="text-sm text-muted">Navegue por tipo de produto</p>
-          </div>
-          <Link href="/produtos" className="hidden items-center gap-1 text-sm font-semibold text-primary hover:text-primary-dark sm:flex">Ver tudo <ChevronRight size={16} /></Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-5">
-          {categories.map((c) => (
-            <Link key={c.slug} href={`/categoria/${c.slug}`} className="card card-hover group flex flex-col items-center gap-3 p-4 text-center">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-light text-primary-dark transition group-hover:bg-primary group-hover:text-white">
-                <Icon name={c.icon} size={26} />
-              </span>
-              <span className="text-xs font-semibold leading-tight text-foreground">{c.name}</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {/* DESTAQUES */}
       <ProductSection title="Mais vendidos" subtitle="Os favoritos dos nossos clientes" items={destaque} href="/produtos" />
 
@@ -174,8 +146,8 @@ function ProductSection({ title, subtitle, items, href }: { title: string; subti
         </div>
         <Link href={href} className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary-dark">Ver mais <ChevronRight size={16} /></Link>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-        {items.slice(0, 8).map((p) => <ProductCard key={p.id} product={p} />)}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {items.slice(0, 10).map((p) => <ProductCard key={p.id} product={p} />)}
       </div>
     </section>
   );

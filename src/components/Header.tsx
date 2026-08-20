@@ -95,8 +95,8 @@ export default function Header() {
 
       {/* Categories bar (desktop) */}
       <div className="hidden border-t border-border bg-surface lg:block">
-        <div className="container-app flex items-center gap-1">
-          <div className="relative" onMouseEnter={() => setCatOpen(true)} onMouseLeave={() => setCatOpen(false)}>
+        <div className="container-app flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <div className="relative shrink-0" onMouseEnter={() => setCatOpen(true)} onMouseLeave={() => setCatOpen(false)}>
             <button className="flex items-center gap-2 rounded-t-lg px-3 py-2.5 text-sm font-semibold text-navy hover:text-primary">
               <Menu size={18} /> Todas as categorias <ChevronDown size={15} />
             </button>
@@ -110,13 +110,13 @@ export default function Header() {
               </div>
             )}
           </div>
-          <span className="mx-1 h-5 w-px bg-border" />
+          <span className="mx-1 h-5 w-px shrink-0 bg-border" />
           {categories.map((c) => (
-            <Link key={c.slug} href={`/categoria/${c.slug}`} className="rounded-lg px-3 py-2.5 text-sm text-foreground hover:text-primary">
+            <Link key={c.slug} href={`/categoria/${c.slug}`} className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-foreground hover:text-primary">
               {c.name}
             </Link>
           ))}
-          <Link href="/ofertas" className="ml-auto rounded-lg px-3 py-2.5 uppercase">
+          <Link href="/ofertas" className="ml-auto shrink-0 rounded-lg px-3 py-2.5 uppercase">
             <span className="neon-ofertas">Ofertas</span>
           </Link>
         </div>
